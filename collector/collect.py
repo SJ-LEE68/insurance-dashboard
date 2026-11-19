@@ -38,7 +38,19 @@ LINES = {
     "상해":      ("PB14", "024400010006"),
 }
 
-KNIA_COMPANIES = ["N01", "N02", "N03", "N05", "N09", "N10", "N11", "N16", "N17", "N51", "N52", "N66", "N71"]
+# 비상용 목록. 실제로는 탭마다 협회 화면의 회사 목록을 읽어 씀 (탭마다 공시 회사가 다름)
+KNIA_COMPANIES = ["N01", "N02", "N03", "N05", "N08", "N09", "N10", "N11", "N16", "N17",
+                  "N51", "N52", "N66", "N70", "N71"]
+
+
+def knia_companies(tpty):
+    try:
+        r = requests.get("https://kpub.knia.or.kr/popup/disclosurePopup.do", params={"tabType": "1", "tptyCode": tpty},
+                         timeout=60, headers={**UA, "Referer": "https://kpub.knia.or.kr/"})
+        codes = [i.get("value") for i in BeautifulSoup(r.text, "lxml").select("input[name=pCode]") if i.get("value")]
+        return codes or KNIA_COMPANIES
+    except Exception:
+        return KNIA_COMPANIES
 
 
 # ---------------------------------------------------------------- 공통 도우미
@@ -89,7 +101,7 @@ def underwriting(name):
 
 # ---------------------------------------------------------------- 손보협회
 def fetch_knia(tpty):
-    params = [("tabType", "1"), ("tptyCode", tpty)] + [("pCode", c) for c in KNIA_COMPANIES] \
+    params = [("tabType", "1"), ("tptyCode", tpty)] + [("pCode", c) for c in knia_companies(tpty)] \
              + [("channel", c) for c in "ABCDE"]
     r = requests.get("https://kpub.knia.or.kr/popup/disclosureList.do", params=params, timeout=90,
                      headers={**UA, "Referer": "https://kpub.knia.or.kr/"})
