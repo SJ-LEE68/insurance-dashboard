@@ -94,7 +94,9 @@ def fetch_knia(tpty):
     r = requests.get("https://kpub.knia.or.kr/popup/disclosureList.do", params=params, timeout=90,
                      headers={**UA, "Referer": "https://kpub.knia.or.kr/"})
     r.raise_for_status()
-    return chompjs.parse_js_object(r.text)["list"]
+    # 응답 문자열 안에 날것의 줄바꿈/탭이 섞여 있어 그대로는 파싱 불가 -> 이스케이프
+    text = r.text.replace("\r", "").replace("\n", "\\n").replace("\t", " ")
+    return chompjs.parse_js_object(text, json_params={"strict": False})["list"]
 
 
 def parse_knia(rows, line):
@@ -222,8 +224,11 @@ def parse_klia(html, line):
 # ---------------------------------------------------------------- Supabase 저장
 class DB:
     def __init__(self):
-        self.url = os.environ["SUPABASE_URL"].rstrip("/") + "/rest/v1/"
-        key = os.environ["SUPABASE_SERVICE_KEY"]
+        self.url = os.environ["SUPABASE_URL"].strip().rstrip("/") + "/rest/v1/"
+        key = os.environ["SUPABASE_SERVICE_KEY"].strip()
+        if not key.isascii() or " " in key or not (key.startswith("eyJ") or key.startswith("sb_secret_")):
+            raise RuntimeError("SUPABASE_SERVICE_KEY 형식이 이상함: 'eyJ'로 시작하는 service_role 키만 "
+                               "공백·다른 글자 없이 다시 등록하세요 (키 값은 로그에 출력하지 않음)")
         self.h = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 
     def upsert(self, table, rows, on_conflict, returning=False):
