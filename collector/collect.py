@@ -216,7 +216,9 @@ def parse_klia(html, line):
                 row.update(pay_amount_text=amt, pay_amount_won=won(amt),
                            premium_m=num(_txt(tds[3])), premium_f=num(_txt(tds[4])))
             elif part == "주계약":
-                row.update(pay_amount_text=main_amt, pay_amount_won=won(main_amt))
+                # 공시에는 주계약 가입금액만 있음. 딸린 급부의 실제 지급액은 다를 수 있어 숫자로 넣지 않음
+                row.update(pay_amount_text=f"주계약 가입금액 {main_amt} 기준(급부별 지급비율은 상품요약서 확인)",
+                           pay_amount_won=None)
             cur["coverage"].append(row)
     return prods
 
