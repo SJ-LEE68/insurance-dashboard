@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>암보험 보험료·보장 비교 대시보드</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--blue:#2563eb;--blue-d:#1e40af;--ink:#0f172a;--mute:#64748b;--line:#e2e8f0;--bg:#f8fafc;--good:#047857;--bad:#b91c1c}
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:var(--ink);font-family:Pretendard,-apple-system,system-ui,sans-serif;font-size:14px;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:24px;margin:0 0 4px}
+  h2{font-size:17px;margin:36px 0 4px}
+  .sub{color:var(--mute);font-size:13px;margin:0 0 12px}
+  .lead{font-size:15px;margin:10px 0 18px;padding:12px 14px;background:var(--bg);border-left:3px solid var(--blue);border-radius:4px}
+  .filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:12px 0 18px;padding:12px;border:1px solid var(--line);border-radius:10px}
+  .filters label{font-size:12px;color:var(--mute);margin-right:4px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{border:0;background:#fff;padding:6px 11px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink)}
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button.on{background:var(--blue);color:#fff}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .card{border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card .k{font-size:12px;color:var(--mute)}
+  .card .v{font-size:26px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}
+  .card.main .v{font-size:32px;color:var(--blue)}
+  .card .s{font-size:12px;color:var(--mute);margin-top:4px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .chart{position:relative;width:100%}
+  .chart svg{display:block;width:100%;height:auto}
+  .chart text{font-family:inherit;font-size:12px;fill:#334155}
+  .tip{position:absolute;pointer-events:none;background:#0f172a;color:#fff;font-size:12px;padding:6px 8px;border-radius:6px;white-space:nowrap;display:none;z-index:5}
+  .tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+  table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  th{background:var(--bg);font-weight:600;font-size:12px;color:#334155;position:sticky;top:0}
+  td.n,th.n{text-align:right}
+  td.w{white-space:normal;min-width:240px}
+  .heat td.c{text-align:center;font-size:12px;min-width:62px}
+  tr.click{cursor:pointer} tr.click:hover{background:#eff6ff}
+  tr.sel{background:#dbeafe}
+  .good{color:var(--good);font-weight:600}.bad{color:var(--bad)}
+  .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:999px;background:#eef2ff;color:var(--blue-d);margin-right:3px}
+  .tag.g{background:#f1f5f9;color:#475569}
+  .detail{margin-top:14px;border:1px solid var(--blue);border-radius:10px;padding:14px;display:none}
+  .detail h3{margin:0 0 4px;font-size:15px}
+  .grp{margin-top:10px}
+  .grp b{font-size:12px;color:var(--blue-d)}
+  .grp ul{margin:4px 0 0;padding-left:18px}
+  .grp li{margin:2px 0}
+  .grp .r{color:var(--mute);font-size:12px}
+  .tbl-scroll{max-height:560px;overflow:auto}
+  .note{font-size:12px;color:var(--mute);margin:6px 0 0}
+  footer{margin-top:40px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--mute);line-height:1.7}
+  .err{color:var(--bad);padding:20px;border:1px solid var(--bad);border-radius:8px}
+  @media (max-width:820px){.cards{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.card .v{font-size:22px}.card.main .v{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>암보험 보험료·보장 비교</h1>
+  <p class="sub">생명보험협회·손해보험협회 공시실 상품비교공시 · 협회 표준조건(주로 40세) 기준 · 매주 월요일 자동 수집</p>
+
+  <div class="filters" id="filters">
+    <span><label>성별</label><span class="seg" data-f="sex"><button data-v="M" class="on">남자</button><button data-v="F">여자</button></span></span>
+    <span><label>협회</label><span class="seg" data-f="source"><button data-v="all" class="on">전체</button><button data-v="knia">손보</button><button data-v="klia">생보</button></span></span>
+    <span><label>갱신</label><span class="seg" data-f="renew"><button data-v="all" class="on">전체</button><button data-v="N">비갱신</button><button data-v="Y">갱신</button></span></span>
+    <span><label>심사</label><span class="seg" data-f="uw"><button data-v="all" class="on">전체</button><button data-v="일반심사">일반</button><button data-v="간편심사">간편</button></span></span>
+    <span><label>환급</label><span class="seg" data-f="refund"><button data-v="all" class="on">전체</button><button data-v="표준형">표준</button><button data-v="저해지">저해지</button><button data-v="무해지">무해지</button></span></span>
+  </div>
+
+  <p class="lead" id="lead">데이터를 불러오는 중…</p>
+
+  <div class="cards">
+    <div class="card main"><div class="k">비교 상품 수</div><div class="v" id="k-n">–</div><div class="s" id="k-co">–</div></div>
+    <div class="card"><div class="k">보험가격지수 중앙값</div><div class="v" id="k-med">–</div><div class="s">100 = 업계 평균 · 낮을수록 저렴</div></div>
+    <div class="card"><div class="k">가격지수 가장 낮은 상품</div><div class="v" id="k-best">–</div><div class="s" id="k-best-n">–</div></div>
+    <div class="card"><div class="k">최근 수집일</div><div class="v" id="k-date">–</div><div class="s">출처: 생·손보협회 공시실</div></div>
+  </div>
+
+  <h2>회사별 보험가격지수 — 같은 보장을 누가 싸게 파나</h2>
+  <p class="sub">회사 상품들의 보험가격지수 중앙값. 보험료 절대값은 상품 구성이 달라 직접 비교가 어렵기 때문에, 업계 평균 대비 지수로 비교합니다. 점선 = 100.</p>
+  <div class="chart" id="c-company"></div>
+
+  <h2>담보 구성 — 회사별로 무엇을 보장하나</h2>
+  <p class="sub">칸의 숫자 = 그 회사 상품 중 해당 담보가 들어 있는 비율. 진할수록 많은 상품이 보장합니다. 마지막 열은 일반 암진단 담보의 최고 지급액(손보 기준·생보는 특약 가입금액).</p>
+  <div class="tw"><table class="heat" id="t-heat"></table></div>
+
+  <div class="grid2">
+    <div>
+      <h2>환급형태·심사방식별 가격 차이</h2>
+      <p class="sub">각 그룹 상품들의 보험가격지수 중앙값(n = 상품 수).</p>
+      <div class="chart" id="c-struct"></div>
+    </div>
+    <div>
+      <h2>판매채널별 가격 차이</h2>
+      <p class="sub">다이렉트(CM)가 대면보다 실제로 저렴한지. 여러 채널에 동시 판매되는 상품은 각 채널에 포함.</p>
+      <div class="chart" id="c-channel"></div>
+    </div>
+  </div>
+
+  <h2>상품 상세 <span class="sub" style="font-size:13px">— 행을 누르면 담보·지급사유가 열립니다</span></h2>
+  <div class="tw tbl-scroll"><table id="t-prod"></table></div>
+  <div class="detail" id="detail"></div>
+
+  <footer>
+    <b>데이터 출처</b> 손해보험협회 공시실(kpub.knia.or.kr) 장기보장성 비교공시 · 생명보험협회 공시실(pub.insure.or.kr) 보장성 상품비교공시<br>
+    <b>읽는 법·한계</b> 공시 보험료는 협회 표준 가입조건 기준이며 실제 가입 보험료와 다릅니다.
+    손보 보험료는 표준 담보 구성의 보장보험료, 생보 보험료는 주계약 보험료라서 두 협회의 보험료 절대값은 직접 비교하지 않습니다.
+    보험가격지수(100 = 업계 평균)와 보장범위지수는 각 협회가 같은 기준으로 계산해 공시한 값입니다.
+    담보 분류(암진단·유사암·수술 등)는 담보명 기반 규칙으로 자동 분류한 것입니다.
+  </footer>
+</div>
+
+<script>
+  const { createClient } = supabase;
+  const db = createClient(
+    'https://mfoixmokjzuzxdajitgk.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mb2l4bW9ranp1enhkYWppdGdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ4MjczOTAsImV4cCI6MjExMDQwMzM5MH0.hsUl9oH_Z643lJTZ7Ysz8217Y4UkMR1J4nN3KNeUVQU'
+  );
+
+  const GROUPS = ['암진단','유사암·소액암 진단','수술','항암·주요치료','입원·통원','전이·재진단','뇌·심장','납입면제'];
+  const F = {sex:'M', source:'all', renew:'all', uw:'all', refund:'all'};
+  let ALL = [], selectedId = null;
+
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => n == null ? '–' : Math.round(n).toLocaleString('ko-KR');
+  const man = (won) => won == null ? '–' : (won >= 1e8 ? (won/1e8).toLocaleString('ko-KR',{maximumFractionDigits:1})+'억' : (won/1e4).toLocaleString('ko-KR')+'만') + '원';
+  const median = (a) => { const s = a.filter(x => x != null && !isNaN(x)).sort((x,y)=>x-y); if (!s.length) return null; const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1]+s[m])/2; };
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const idx = (p) => F.sex === 'M' ? p.price_idx_m : p.price_idx_f;
+  const prem = (p) => F.sex === 'M' ? p.premium_m : p.premium_f;
+  const channels = (p) => [...new Set(String(p.channel||'').split(/[,·]/).map(c => c.trim().replace('채널','').replace('방카슈랑스','방카')).filter(Boolean))];
+  const short = (s, n) => s.length > n ? s.slice(0, n-1) + '…' : s;
+
+  function filtered() {
+    return ALL.filter(p =>
+      (F.source === 'all' || p.source === F.source) &&
+      (F.renew === 'all' || (F.renew === 'Y') === !!p.renewable) &&
+      (F.uw === 'all' || p.underwriting === F.uw) &&
+      (F.refund === 'all' || p.refund_type === F.refund));
+  }
+
+  // ---------- 막대그래프 (가로) ----------
+  function hbars(el, rows, opt = {}) {
+    const W = Math.max(320, el.clientWidth || 600), rowH = 26, labW = opt.labW || 130, padR = 54, top = 8;
+    const H = top + rows.length * rowH + 26;
+    const max = Math.max(opt.min || 130, ...rows.map(r => r.v || 0)) * 1.05;
+    const x = (v) => labW + (W - labW - padR) * v / max;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.aria||'')}">`;
+    const ticks = [0, 50, 100, 150, 200, 250, 300, 400].filter(t => t <= max);
+    ticks.forEach(t => { s += `<line x1="${x(t)}" x2="${x(t)}" y1="${top}" y2="${H-20}" stroke="#f1f5f9"/><text x="${x(t)}" y="${H-6}" text-anchor="middle" fill="#94a3b8">${t}</text>`; });
+    rows.forEach((r, i) => {
+      const y = top + i * rowH;
+      const good = r.v != null && r.v <= 100;
+      s += `<text x="${labW-8}" y="${y+rowH/2+4}" text-anchor="end">${esc(short(r.label, 13))}</text>`;
+      if (r.v != null) s += `<rect data-i="${i}" x="${x(0)}" y="${y+5}" width="${Math.max(1, x(r.v)-x(0))}" height="${rowH-10}" rx="3" fill="${good ? 'var(--blue)' : '#93c5fd'}"/>` +
+        `<text x="${x(r.v)+5}" y="${y+rowH/2+4}" fill="#0f172a" font-weight="600">${r.v.toFixed(1)}</text>`;
+    });
+    s += `<line x1="${x(100)}" x2="${x(100)}" y1="${top}" y2="${H-20}" stroke="#0f172a" stroke-dasharray="4 3"/></svg><div class="tip"></div>`;
+    el.innerHTML = s;
+    const tip = el.querySelector('.tip');
+    el.querySelectorAll('rect[data-i]').forEach(rc => {
+      rc.addEventListener('mousemove', (e) => {
+        const r = rows[+rc.dataset.i], b = el.getBoundingClientRect();
+        tip.textContent = `${r.label} · 지수 ${r.v.toFixed(1)}${r.n ? ' · 상품 ' + r.n + '개' : ''}`;
+        tip.style.display = 'block'; tip.style.left = Math.min(e.clientX - b.left + 10, b.width - 220) + 'px'; tip.style.top = (e.clientY - b.top - 30) + 'px';
+      });
+      rc.addEventListener('mouseleave', () => tip.style.display = 'none');
+    });
+  }
+
+  function render() {
+    const rows = filtered();
+    const vals = rows.map(idx).filter(v => v != null);
+    const companies = [...new Set(rows.map(p => p.company))];
+
+    // 카드
+    $('k-n').textContent = rows.length.toLocaleString('ko-KR') + '개';
+    $('k-co').textContent = `손보 ${new Set(rows.filter(p=>p.source==='knia').map(p=>p.company)).size}개사 · 생보 ${new Set(rows.filter(p=>p.source==='klia').map(p=>p.company)).size}개사`;
+    const med = median(vals);
+    $('k-med').textContent = med == null ? '–' : med.toFixed(1);
+    const best = rows.filter(p => idx(p) != null).sort((a,b) => idx(a) - idx(b))[0];
+    $('k-best').textContent = best ? idx(best).toFixed(1) : '–';
+    $('k-best-n').textContent = best ? `${best.company} · ${short(best.name, 26)}` : '–';
+    const d = rows.map(p => p.collected_on).sort().pop();
+    $('k-date').textContent = d ? d.slice(5).replace('-', '.') : '–';
+
+    // 회사별 가격지수
+    const byCo = companies.map(c => {
+      const ps = rows.filter(p => p.company === c);
+      return {label: c, v: median(ps.map(idx)), n: ps.length};
+    }).filter(r => r.v != null).sort((a,b) => a.v - b.v);
+    hbars($('c-company'), byCo, {labW: 150, aria: '회사별 보험가격지수 중앙값'});
+
+    // 요약 문장
+    if (byCo.length) {
+      const lo = byCo[0], hi = byCo[byCo.length-1];
+      $('lead').innerHTML = `${F.sex === 'M' ? '남자' : '여자'} 40세 기준 ${rows.length}개 암보험 중 같은 보장 대비 가장 저렴한 회사는 <b>${esc(lo.label)}</b>(가격지수 중앙값 ${lo.v.toFixed(1)}), 가장 비싼 회사는 <b>${esc(hi.label)}</b>(${hi.v.toFixed(1)})로 <b>${(hi.v/lo.v).toFixed(1)}배</b> 차이가 납니다.`;
+    } else { $('lead').textContent = '조건에 맞는 상품이 없습니다. 필터를 바꿔 보세요.'; }
+
+    // 담보 히트맵
+    const heat = companies.map(c => {
+      const ps = rows.filter(p => p.company === c);
+      const share = GROUPS.map(g => ps.filter(p => (p.groups || '').split(',').includes(g)).length / ps.length);
+      const maxDiag = Math.max(...ps.map(p => p.cancer_diag_max_won || 0));
+      return {c, n: ps.length, share, maxDiag: maxDiag || null, sector: ps[0].sector};
+    }).sort((a,b) => (b.maxDiag||0) - (a.maxDiag||0));
+    let h = `<thead><tr><th>회사</th><th class="n">상품</th>${GROUPS.map(g => `<th class="n">${g.replace(' 진단','')}</th>`).join('')}<th class="n">암진단 최고액</th></tr></thead><tbody>`;
+    heat.forEach(r => {
+      h += `<tr><td>${esc(r.c)} <span class="tag g">${r.sector}</span></td><td class="n">${r.n}</td>` +
+        r.share.map(s => `<td class="c" style="background:rgba(37,99,235,${(s*0.85).toFixed(2)});color:${s > .55 ? '#fff' : '#0f172a'}">${s ? Math.round(s*100) + '%' : '·'}</td>`).join('') +
+        `<td class="n"><b>${man(r.maxDiag)}</b></td></tr>`;
+    });
+    $('t-heat').innerHTML = h + '</tbody>';
+
+    // 구조 분석
+    const grp = (key, order) => order.map(k => { const ps = rows.filter(p => p[key] === k); return {label: k, v: median(ps.map(idx)), n: ps.length}; }).filter(r => r.n);
+    const structRows = [...grp('refund_type', ['표준형','저해지','무해지']).map(r => ({...r, label: '환급 · ' + r.label})),
+                        ...grp('underwriting', ['일반심사','간편심사']).map(r => ({...r, label: '심사 · ' + r.label}))];
+    hbars($('c-struct'), structRows.map(r => ({...r, label: `${r.label} (n=${r.n})`})), {labW: 150, aria: '환급형태·심사방식별 가격지수'});
+    const chs = ['대면','TM','CM','방카','기타'];
+    const chRows = chs.map(c => { const ps = rows.filter(p => channels(p).includes(c)); return {label: `${c} (n=${ps.length})`, v: median(ps.map(idx)), n: ps.length}; }).filter(r => r.n);
+    hbars($('c-channel'), chRows, {labW: 110, aria: '판매채널별 가격지수'});
+
+    // 상품 표
+    const list = rows.slice().sort((a,b) => (idx(a) ?? 1e9) - (idx(b) ?? 1e9));
+    let t = `<thead><tr><th>회사</th><th>상품</th><th>채널</th><th>갱신</th><th>환급</th><th>심사</th><th class="n">월보험료(${F.sex==='M'?'남':'여'})</th><th class="n">가격지수</th><th class="n">보장범위(암진단)</th><th class="n">암진단 최고액</th></tr></thead><tbody>`;
+    list.forEach(p => {
+      const v = idx(p);
+      t += `<tr class="click${p.id === selectedId ? ' sel' : ''}" data-id="${p.id}"><td>${esc(p.company)} <span class="tag g">${p.sector}</span></td><td class="w">${esc(p.name)}</td><td>${esc(channels(p).join('·'))}</td><td>${p.renewable ? '갱신' : '비갱신'}</td><td>${esc(p.refund_type||'')}</td><td>${esc((p.underwriting||'').replace('심사',''))}</td>` +
+        `<td class="n">${fmt(prem(p))}</td><td class="n ${v != null && v <= 100 ? 'good' : 'bad'}">${v == null ? '–' : v.toFixed(1)}</td><td class="n">${p.cover_idx_diag ?? '–'}</td><td class="n">${man(p.cancer_diag_max_won)}</td></tr>`;
+    });
+    $('t-prod').innerHTML = t + '</tbody>';
+    $('t-prod').querySelectorAll('tr.click').forEach(tr => tr.addEventListener('click', () => openDetail(+tr.dataset.id)));
+  }
+
+  async function openDetail(id) {
+    selectedId = id;
+    document.querySelectorAll('#t-prod tr.sel').forEach(r => r.classList.remove('sel'));
+    document.querySelector(`#t-prod tr[data-id="${id}"]`)?.classList.add('sel');
+    const p = ALL.find(x => x.id === id), box = $('detail');
+    box.style.display = 'block';
+    box.innerHTML = `<h3>${esc(p.company)} · ${esc(p.name)}</h3><p class="note">불러오는 중…</p>`;
+    const { data, error } = await db.from('ins_coverage')
+      .select('part,name,coverage_group,pay_reason,pay_amount_text,premium_m,premium_f')
+      .eq('product_id', id).eq('collected_on', p.collected_on).order('id');
+    if (error) { box.innerHTML += `<p class="err">${esc(error.message)}</p>`; return; }
+    const by = {};
+    data.forEach(c => (by[c.coverage_group || '기타'] ||= []).push(c));
+    const order = [...GROUPS, ...Object.keys(by).filter(g => !GROUPS.includes(g))].filter(g => by[g]);
+    box.innerHTML = `<h3>${esc(p.company)} · ${esc(p.name)}</h3>
+      <p class="note">${p.source === 'knia' ? '손해보험협회' : '생명보험협회'} 공시 · ${esc(p.std_condition || '')} · 채널 ${esc(channels(p).join('·'))} · ${p.renewable ? '갱신형' : '비갱신형'} · ${esc(p.refund_type)} · 월보험료 남 ${fmt(p.premium_m)}원 / 여 ${fmt(p.premium_f)}원 · 가격지수 남 ${p.price_idx_m ?? '–'} / 여 ${p.price_idx_f ?? '–'}</p>` +
+      order.map(g => `<div class="grp"><b>${esc(g)}</b> <span class="r">${by[g].length}개</span><ul>${by[g].map(c =>
+        `<li>${esc(c.name)} — <b>${esc(c.pay_amount_text || '–')}</b>${c.premium_m != null ? ` <span class="r">(특약 보험료 남 ${fmt(c.premium_m)} / 여 ${fmt(c.premium_f)}원)</span>` : ''}${c.pay_reason ? `<br><span class="r">${esc(short(c.pay_reason, 160))}</span>` : ''}</li>`).join('')}</ul></div>`).join('');
+    box.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  }
+
+  document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    F[seg.dataset.f] = b.dataset.v;
+    seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    render();
+  }));
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(render, 150); });
+
+  (async () => {
+    const { data, error } = await db.from('ins_v_product').select('*').eq('line', '암');
+    if (error) { $('lead').outerHTML = `<p class="err">데이터를 불러오지 못했습니다: ${esc(error.message)}</p>`; return; }
+    ALL = data;
+    render();
+  })();
+</script>
+</body>
+</html>
