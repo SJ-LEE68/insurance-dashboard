@@ -71,19 +71,26 @@ def won(text):
     """지급액 원문에서 첫 금액을 원 단위로: '1,000만원(1년미만 50%)' -> 10000000, '1억원' -> 100000000"""
     if not text:
         return None
+    # '원'이 없는 표기('1,000만'), '1천5백만원' 같은 복합 표기도 읽음. 가장 앞에 나오는 금액을 사용
     t = str(text).replace(",", "").replace(" ", "")
-    m = re.search(r"(\d+(?:\.\d+)?)억(?:(\d+)천)?(?:(\d+)백)?(?:(\d+))?만?원", t)
-    if m:
-        v = float(m.group(1)) * 1e8
-        if m.group(2): v += int(m.group(2)) * 1e7
-        if m.group(3): v += int(m.group(3)) * 1e6
-        if m.group(4): v += int(m.group(4)) * 1e4
-        return int(v)
-    m = re.search(r"(\d+(?:\.\d+)?)(천만|백만|십만|만|천)?원", t)
+    pat = re.compile(r"(?P<eok>\d+(?:\.\d+)?)억(?:(?P<ec>\d+)천)?(?:(?P<eb>\d+)백)?(?:(?P<em>\d+))?만?"
+                     r"|(?P<cb1>\d+)천(?P<cb2>\d+)백만|(?P<cm>\d+)천만|(?P<bm>\d+)백만|(?P<sm>\d+)십만"
+                     r"|(?P<m>\d+(?:\.\d+)?)만|(?P<c>\d+)천원|(?P<w>\d+)원")
+    m = pat.search(t)
     if not m:
         return None
-    mult = {"천만": 1e7, "백만": 1e6, "십만": 1e5, "만": 1e4, "천": 1e3, None: 1}[m.group(2)]
-    return int(float(m.group(1)) * mult)
+    g = m.groupdict()
+    if g["eok"]:
+        v = float(g["eok"]) * 1e8
+        v += int(g["ec"] or 0) * 1e7 + int(g["eb"] or 0) * 1e6 + int(g["em"] or 0) * 1e4
+        return int(v)
+    if g["cb1"]: return int(g["cb1"]) * 10_000_000 + int(g["cb2"]) * 1_000_000
+    if g["cm"]: return int(g["cm"]) * 10_000_000
+    if g["bm"]: return int(g["bm"]) * 1_000_000
+    if g["sm"]: return int(g["sm"]) * 100_000
+    if g["m"]: return int(float(g["m"]) * 10_000)
+    if g["c"]: return int(g["c"]) * 1_000
+    return int(g["w"])
 
 
 def refund_type(name, note=""):
@@ -338,6 +345,12 @@ def main():
                     except Exception:
                         pass
             time.sleep(3)
+    if db:  # 새 데이터 기준으로 유사 상품 점수 다시 계산 (Supabase 함수 ins_refresh_similar)
+        try:
+            r = requests.post(db.url + "rpc/ins_refresh_all", json={}, headers=db.h, timeout=300)
+            print("유사 상품 재계산:", r.status_code, r.text[:80])
+        except Exception as e:
+            print(f"[경고] 유사 상품 재계산 실패: {e}", file=sys.stderr)
     sys.exit(1 if failed else 0)
 
 
